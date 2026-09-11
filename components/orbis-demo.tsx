@@ -54,7 +54,7 @@ function OrbisSession({ clearJwt }: { clearJwt: () => void }) {
           !session.connected || session.runStarted || session.controlsBusy
         }
         onActivityChange={session.setNanoBusy}
-        onImageReady={session.startFromNanoOutput}
+        onReady={session.startFromNanoOutput}
       />
     </>
   );

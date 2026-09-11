@@ -9,8 +9,10 @@ import { NANO_BANANA_PROMPT, ORBIS_KICKOFF_PROMPT } from "@/lib/nano-banana";
 type NanoBananaExampleProps = {
   disabled: boolean;
   onActivityChange: (active: boolean) => void;
-  onImageReady: (image: File) => Promise<void>;
+  onReady: (image: File, prompt: string) => Promise<void>;
 };
+
+type PipelineStage = "idle" | "editing" | "analyzing" | "starting";
 
 function useObjectUrl(file: File | null) {
   const [url, setUrl] = useState("");
@@ -31,17 +33,20 @@ function useObjectUrl(file: File | null) {
 export function NanoBananaExample({
   disabled,
   onActivityChange,
-  onImageReady,
+  onReady,
 }: NanoBananaExampleProps) {
   const [output, setOutput] = useState<File | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [stage, setStage] = useState<PipelineStage>("idle");
+  const [groundedPrompt, setGroundedPrompt] = useState("");
   const [error, setError] = useState("");
   const outputUrl = useObjectUrl(output);
+  const busy = stage !== "idle";
 
   const editImage = async () => {
-    setBusy(true);
+    setStage("editing");
     onActivityChange(true);
     setError("");
+    setGroundedPrompt("");
     try {
       const sourceResponse = await fetch(dogImage.src);
       if (!sourceResponse.ok) throw new Error("Could not load dog.png");
@@ -63,11 +68,31 @@ export function NanoBananaExample({
         type: blob.type || "image/png",
       });
       setOutput(editedImage);
-      await onImageReady(editedImage);
+
+      setStage("analyzing");
+      const analysisForm = new FormData();
+      analysisForm.append("image", editedImage);
+      analysisForm.append("prompt", ORBIS_KICKOFF_PROMPT);
+      const analysisResponse = await fetch("/api/orbis-prompt", {
+        method: "POST",
+        body: analysisForm,
+      });
+      const analysis = (await analysisResponse.json()) as {
+        prompt?: string;
+        error?: string;
+      };
+      if (!analysisResponse.ok || !analysis.prompt?.trim()) {
+        throw new Error(analysis.error || "Gemini returned no grounded prompt");
+      }
+
+      const nextPrompt = analysis.prompt.trim();
+      setGroundedPrompt(nextPrompt);
+      setStage("starting");
+      await onReady(editedImage, nextPrompt);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
-      setBusy(false);
+      setStage("idle");
       onActivityChange(false);
     }
   };
@@ -78,14 +103,19 @@ export function NanoBananaExample({
       <div className="nano-demo-content">
         <p className="hint">
           Connect to Orbis, then run the complete example with one button. Nano
-          Banana edits the bundled image and Orbis immediately starts streaming
-          from the result.
+          Banana edits the bundled image, Gemini grounds the user prompt in that
+          result, and Orbis starts streaming from the edited frame.
         </p>
 
         <div className="nano-preview-grid">
           <figure className="nano-preview">
             <div className="nano-image-frame">
-              <Image src={dogImage} alt="Golden retriever source image" fill />
+              <Image
+                src={dogImage}
+                alt="Golden retriever source image"
+                fill
+                sizes="(max-width: 800px) 100vw, 50vw"
+              />
             </div>
             <figcaption>Source: dog.png</figcaption>
           </figure>
@@ -105,17 +135,27 @@ export function NanoBananaExample({
         </div>
 
         <div className="preset-prompt">
+          <strong>User prompt</strong>
+          <p>{ORBIS_KICKOFF_PROMPT}</p>
+        </div>
+
+        <div className="preset-prompt">
           <strong>Nano Banana prompt</strong>
           <p>{NANO_BANANA_PROMPT}</p>
         </div>
 
         <div className="preset-prompt">
-          <strong>Orbis prompt</strong>
-          <p>{ORBIS_KICKOFF_PROMPT}</p>
+          <strong>Gemini-grounded Orbis prompt</strong>
+          <p>
+            {groundedPrompt || "Generated after analyzing the edited image."}
+          </p>
         </div>
 
         <button type="button" disabled={disabled || busy} onClick={editImage}>
-          {busy ? "Editing and starting stream…" : "Edit and start stream"}
+          {stage === "editing" && "Editing image…"}
+          {stage === "analyzing" && "Analyzing image and prompt…"}
+          {stage === "starting" && "Starting stream…"}
+          {stage === "idle" && "Edit and start stream"}
         </button>
 
         {error && <p className="error">{error}</p>}

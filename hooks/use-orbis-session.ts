@@ -3,7 +3,6 @@
 import { useReactor, useReactorMessage } from "@reactor-team/js-sdk";
 import { useEffect, useRef, useState } from "react";
 
-import { ORBIS_KICKOFF_PROMPT } from "@/lib/nano-banana";
 import {
   DOCUMENTED_RESOLUTIONS,
   type OrbisMessage,
@@ -39,6 +38,7 @@ export function useOrbisSession(onDisconnected: () => void) {
   const previousStatus = useRef(status);
   const disconnecting = useRef(false);
   const conditionsReadyResolver = useRef<(() => void) | null>(null);
+  const imageReadyResolver = useRef<(() => void) | null>(null);
   const expectsImageForRun = useRef(false);
 
   const connected = status === "ready";
@@ -107,6 +107,11 @@ export function useOrbisSession(onDisconnected: () => void) {
       conditionsReadyResolver.current = null;
     }
 
+    if (message.type === "state" && message.has_image === true) {
+      imageReadyResolver.current?.();
+      imageReadyResolver.current = null;
+    }
+
     if (message.type === "state" && message.available_resolutions) {
       const reported = message.available_resolutions.map(String);
       if (reported.length) {
@@ -131,14 +136,17 @@ export function useOrbisSession(onDisconnected: () => void) {
     }
   });
 
-  const waitForConditionsReady = () => {
+  const waitForSignal = (
+    resolver: { current: (() => void) | null },
+    signalName: string,
+  ) => {
     let timeout: ReturnType<typeof setTimeout>;
     const promise = new Promise<void>((resolve, reject) => {
       timeout = setTimeout(() => {
-        conditionsReadyResolver.current = null;
-        reject(new Error("Timed out waiting for Orbis conditions_ready."));
+        resolver.current = null;
+        reject(new Error(`Timed out waiting for Orbis ${signalName}.`));
       }, 15_000);
-      conditionsReadyResolver.current = () => {
+      resolver.current = () => {
         clearTimeout(timeout);
         resolve();
       };
@@ -147,7 +155,7 @@ export function useOrbisSession(onDisconnected: () => void) {
       promise,
       cancel: () => {
         clearTimeout(timeout);
-        conditionsReadyResolver.current = null;
+        resolver.current = null;
       },
     };
   };
@@ -162,20 +170,26 @@ export function useOrbisSession(onDisconnected: () => void) {
 
     if (startImage) {
       const uploaded = await uploadFile(startImage, { name: startImage.name });
+      const imageReady = waitForSignal(imageReadyResolver, "state.has_image");
       const rawReply = await sendCommand("set_image", { image: uploaded });
       if (!rawReply) {
+        imageReady.cancel();
         throw new Error("Orbis did not accept the uploaded start image.");
       }
 
       const reply = unwrapOrbisMessage(rawReply);
       if (reply.type === "command_error") {
+        imageReady.cancel();
         throw new Error(`set_image: ${reply.reason || "rejected"}`);
       }
       if (reply.type !== "image_accepted") {
+        imageReady.cancel();
         throw new Error(
           `Expected image_accepted from Orbis, received ${reply.type || "an unknown reply"}.`,
         );
       }
+
+      await imageReady.promise;
 
       const dimensions =
         reply.width && reply.height ? ` (${reply.width}×${reply.height})` : "";
@@ -185,7 +199,10 @@ export function useOrbisSession(onDisconnected: () => void) {
 
     if (resolution) await sendCommand("set_resolution", { resolution });
 
-    const conditionsReady = waitForConditionsReady();
+    const conditionsReady = waitForSignal(
+      conditionsReadyResolver,
+      "conditions_ready",
+    );
     const promptReply = await sendCommand("set_prompt", {
       prompt: runPrompt.trim(),
     });
@@ -214,10 +231,13 @@ export function useOrbisSession(onDisconnected: () => void) {
 
   const startRun = () => runAction(() => startGeneration(image, prompt));
 
-  const startFromNanoOutput = async (editedImage: File) => {
+  const startFromNanoOutput = async (
+    editedImage: File,
+    groundedPrompt: string,
+  ) => {
     setImage(editedImage);
-    setPrompt(ORBIS_KICKOFF_PROMPT);
-    await runAction(() => startGeneration(editedImage, ORBIS_KICKOFF_PROMPT));
+    setPrompt(groundedPrompt);
+    await runAction(() => startGeneration(editedImage, groundedPrompt));
   };
 
   const steer = () =>
