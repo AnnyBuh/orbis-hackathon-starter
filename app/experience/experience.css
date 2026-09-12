@@ -1,0 +1,467 @@
+/* M8 interactive experience. Scott Pilgrim / Spider-Verse on-screen text over the stream. */
+
+.m8-root {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr); /* never let content (like the log) widen the column */
+  place-items: center;
+  padding: 16px;
+  background: #07070a;
+}
+
+.m8-wrap {
+  width: min(100%, calc((100vh - 170px) * 16 / 9));
+}
+
+.m8-stage {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #000;
+  container-type: inline-size; /* text sizes below use cqw = % of stage width */
+}
+
+.m8-video,
+.m8-video > *,
+.m8-video video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.m8-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-family: var(--font-comic), "Comic Sans MS", Impact, sans-serif;
+  letter-spacing: 0.02em;
+}
+
+/* ---- mock: the still image, drifting slowly so it reads as footage ---- */
+
+.m8-mock {
+  overflow: hidden;
+}
+
+.m8-mock img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  animation: m8-drift 24s ease-in-out infinite alternate;
+}
+
+.m8-mock img.is-paused {
+  animation-play-state: paused;
+}
+
+@keyframes m8-drift {
+  from { transform: scale(1) translate(0, 0); }
+  to { transform: scale(1.08) translate(-1%, 1%); }
+}
+
+/* ---- the ad-style opening, two cards on black (total 9.4s = INTRO.ms) ----
+   0.2s  M8 logo fades in, holds · 2.9s logo fades out
+   4.0s  title fades in · 4.6s (Implicit Version) · 5.2s "Created using" + Visko logo fade in · 8.5s all fade out */
+
+.m8-intro {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  color: #f4f1ea;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  animation: m8-intro-out 900ms ease-in 8500ms forwards;
+}
+
+.m8-intro-logo,
+.m8-intro-title {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.m8-intro-logo {
+  animation: m8-intro-out 700ms ease-in 2900ms forwards;
+}
+
+.m8-intro-logo img {
+  width: 20%;
+  filter: invert(1); /* the logo file is dark ink on transparent */
+  opacity: 0;
+  animation: m8-logo-in 1300ms ease-out 200ms forwards;
+}
+
+.m8-intro-title h1 {
+  margin: 0 0 0.3em;
+  font-weight: 600;
+  font-size: 4.2cqw;
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+  opacity: 0;
+  animation: m8-line-in 1000ms ease-out 4000ms forwards;
+}
+
+.m8-intro-title h2 {
+  margin: 0 0 3.2em;
+  font-weight: 500;
+  font-size: 2.2cqw;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  color: #d9d4c8;
+  opacity: 0;
+  animation: m8-line-in 900ms ease-out 4600ms forwards;
+}
+
+.m8-intro-title p {
+  margin: 0 0 0.8em;
+  font-weight: 500;
+  font-size: 1.5cqw;
+  line-height: 1.2;
+  letter-spacing: 0.06em;
+  color: #a9a59b;
+  opacity: 0;
+  animation: m8-line-in 900ms ease-out 5200ms forwards;
+}
+
+.m8-intro-title img {
+  width: 13%;
+  filter: invert(1); /* Visko's wordmark is black on transparent */
+  opacity: 0;
+  animation: m8-line-in 900ms ease-out 5200ms forwards;
+}
+
+@keyframes m8-logo-in {
+  from { opacity: 0; transform: scale(0.96); filter: invert(1) blur(6px); }
+  to { opacity: 1; transform: scale(1); filter: invert(1) blur(0); }
+}
+
+@keyframes m8-line-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes m8-intro-out {
+  to { opacity: 0; }
+}
+
+/* ---- the closing card ----
+   0.0s  fade to black over the last frame
+   1.2s  first line in · 3.4s second line in · both hold
+   7.6s  lines out
+   8.8s  logo in · 10.6s link in · both stay */
+
+.m8-outro {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  animation: m8-line-in 1000ms ease-out forwards;
+  font: 600 2.4cqw / 1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: 0.02em;
+  color: #f4f1ea;
+  text-align: center;
+}
+
+.m8-outro p {
+  margin: 0;
+  opacity: 0;
+}
+
+.m8-outro-lines,
+.m8-outro-end {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9em;
+}
+
+.m8-outro-lines {
+  animation: m8-intro-out 900ms ease-in 7600ms forwards;
+}
+
+.m8-outro-lines p:nth-child(1) { animation: m8-line-in 1100ms ease-out 1200ms forwards; }
+.m8-outro-lines p:nth-child(2) { animation: m8-line-in 1100ms ease-out 3400ms forwards; }
+
+.m8-outro-end {
+  gap: 2.2em;
+}
+
+.m8-outro-end img {
+  width: 20%;
+  filter: invert(1);
+  opacity: 0;
+  animation: m8-logo-in 1300ms ease-out 8800ms forwards;
+}
+
+.m8-outro-end p {
+  font-size: 2cqw;
+  letter-spacing: 0.04em;
+  animation: m8-line-in 1000ms ease-out 10600ms forwards;
+}
+
+/* ---- shared: words stamp in one at a time, then wobble "on twos" ---- */
+
+.m8-word,
+.m8-tv-word {
+  display: inline-block;
+  margin-right: 0.28em;
+  opacity: 0;
+  animation:
+    m8-pop 420ms cubic-bezier(0.2, 1.6, 0.4, 1) forwards,
+    m8-twos 240ms steps(2) 600ms 3; /* wobbles briefly after landing, then holds still */
+}
+
+@keyframes m8-pop {
+  0% { opacity: 0; transform: scale(0) rotate(-14deg); }
+  60% { opacity: 1; transform: scale(1.3) rotate(5deg); }
+  80% { transform: scale(0.92) rotate(-2deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0); }
+}
+
+@keyframes m8-twos {
+  0% { translate: 0 0; }
+  50% { translate: 1px -1px; }
+  100% { translate: -1px 0; }
+}
+
+/* ---- SCENE card ---- */
+
+.m8-card {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 10cqw;
+  color: #ffe45c;
+  -webkit-text-stroke: 0.04em #000;
+  paint-order: stroke fill;
+  text-shadow: 0.06em 0.06em 0 #ff2d55, -0.04em -0.04em 0 #00e5ff;
+}
+
+/* ---- the TV voice: off-screen, pink, a speaker on its left and a kiss in each line ---- */
+
+.m8-tv {
+  position: absolute;
+  top: 6%;
+  left: 2%;
+  max-width: 66%;
+  display: flex;
+  align-items: flex-start;
+  gap: 1.2cqw;
+}
+
+.m8-speaker {
+  flex: none;
+  width: 5cqw;
+  margin-top: 0.4cqw;
+  color: #ff8fc8; /* same pink as the TV text */
+  opacity: 0;
+  animation: m8-pop 420ms cubic-bezier(0.2, 1.6, 0.4, 1) forwards;
+}
+
+/* While a TV line is being written, the speaker pops in size like the choice buttons.
+   The pulse sits on the inner group so it doesn't restart the fade-in on the svg. */
+.m8-speaker-body {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.m8-speaker.is-talking .m8-speaker-body {
+  animation: m8-pulse 650ms ease-out infinite;
+}
+
+/* Inside the box, in front of the words. */
+.m8-kiss {
+  display: inline-block;
+  width: 1.6em;
+  margin-right: 0.45em;
+  vertical-align: -0.3em;
+  filter: drop-shadow(0.06em 0.06em 0 #000);
+  opacity: 0;
+  animation: m8-pop 420ms cubic-bezier(0.2, 1.6, 0.4, 1) 80ms forwards;
+}
+
+.m8-tv-lines {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6em;
+}
+
+.m8-tv-box {
+  padding: 0.45em 0.9em;
+  font-size: 2.5cqw;
+  line-height: 1.1;
+  color: #ff8fc8;
+  background:
+    radial-gradient(circle, #5c1238 1px, transparent 1.4px) 0 0 / 7px 7px,
+    #1f0612e6;
+  border: 3px solid #000;
+  box-shadow: 6px 6px 0 #ff2d9555;
+  text-shadow: 0 0 10px #ff4fa8aa;
+  animation: m8-slide 380ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+@keyframes m8-slide {
+  0% { opacity: 0; transform: translateX(-40%) skewX(-10deg); }
+  70% { opacity: 1; transform: translateX(4%) skewX(-10deg); }
+  100% { opacity: 1; transform: translateX(0) skewX(-10deg); }
+}
+
+/* ---- the child: the big pop ---- */
+
+.m8-child {
+  position: absolute;
+  left: 50%;
+  top: 56%;
+  width: 84%;
+  transform: translate(-50%, -50%) rotate(-2deg);
+  text-align: center;
+  font-size: 4.4cqw;
+  line-height: 1.05;
+  color: #ffe45c;
+  -webkit-text-stroke: 0.05em #000;
+  paint-order: stroke fill;
+  text-shadow: 0.05em 0.05em 0 #ff2d55, -0.035em -0.035em 0 #00e5ff;
+}
+
+/* ---- the mother's choices: comic panels across the bottom ---- */
+
+.m8-choices {
+  position: absolute;
+  inset: auto 4% 6% 4%;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 3%;
+  pointer-events: auto;
+}
+
+.m8-choices.n2 .m8-choice { max-width: 44%; }
+.m8-choices.n3 .m8-choice { max-width: 31%; }
+
+.m8-choice {
+  padding: 0.5em 0.8em;
+  font-family: inherit;
+  font-size: 2.2cqw;
+  line-height: 1.1;
+  color: #111;
+  background:
+    radial-gradient(circle, #0002 1px, transparent 1.4px) 0 0 / 6px 6px,
+    #fffdf2;
+  border: 4px solid #000;
+  box-shadow: 7px 7px 0 #000;
+  cursor: pointer;
+  opacity: 0;
+  /* Pops in, then keeps popping in size to say "pick me". The delays are set inline per
+     button (pop delay, pulse delay) so the panels pulse out of step with each other. */
+  animation:
+    m8-pop 420ms cubic-bezier(0.2, 1.6, 0.4, 1) forwards,
+    m8-pulse 1300ms ease-out infinite;
+  transition: scale 120ms, box-shadow 120ms;
+}
+
+.m8-choice:nth-child(odd) { rotate: -2deg; }
+.m8-choice:nth-child(even) { rotate: 2deg; }
+
+/* Hold still under the cursor so it's easy to click. */
+.m8-choice:hover {
+  scale: 1.05;
+  box-shadow: 10px 10px 0 #ff2d55;
+  animation-play-state: running, paused;
+}
+
+@keyframes m8-pulse {
+  0%, 40%, 100% { scale: 1; }
+  12% { scale: 1.1; }
+  24% { scale: 0.97; }
+  32% { scale: 1.02; }
+}
+
+/* ---- the answer the user picked, stamped once and gone ---- */
+
+.m8-stamp {
+  position: absolute;
+  left: 50%;
+  bottom: 10%;
+  translate: -50% 0;
+  max-width: 90%;
+  padding: 0.4em 0.8em;
+  font-size: 2.8cqw;
+  text-align: center;
+  color: #111;
+  background: #fffdf2;
+  border: 4px solid #000;
+  box-shadow: 7px 7px 0 #000;
+  animation: m8-stamp 1900ms ease-in forwards;
+}
+
+@keyframes m8-stamp {
+  0% { opacity: 0; transform: scale(2.2) rotate(-8deg); }
+  15% { opacity: 1; transform: scale(1) rotate(-2deg); }
+  75% { opacity: 1; transform: scale(1) rotate(-2deg); }
+  100% { opacity: 0; transform: scale(0.9) rotate(-2deg); }
+}
+
+/* ---- controls and log under the stage (not part of the recording) ---- */
+
+.m8-hud {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.m8-hud button {
+  padding: 8px 14px;
+  color: #f6f4ed;
+  background: #1c1b18;
+  border: 1px solid #38352d;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.m8-hud button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.m8-status,
+.m8-log {
+  color: #8d897e;
+  font-size: 0.78rem;
+}
+
+.m8-ending {
+  color: #e5c978;
+  font-size: 0.85rem;
+}
+
+.m8-error {
+  color: #ff8a8a;
+  font-size: 0.85rem;
+}
+
+.m8-log {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: ui-monospace, Menlo, monospace;
+  line-height: 1.5;
+}
+
+/* One row per entry, so a long prompt never pushes the stage around. */
+.m8-log li {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
