@@ -295,11 +295,12 @@
   inset: 0;
   display: grid;
   place-items: center;
-  font-size: 10cqw;
-  color: #ffe45c;
-  -webkit-text-stroke: 0.04em #000;
-  paint-order: stroke fill;
-  text-shadow: 0.06em 0.06em 0 #ff2d55, -0.04em -0.04em 0 #00e5ff;
+  font-family: var(--font-plain);
+  font-weight: 600;
+  font-size: 5cqw;
+  letter-spacing: 0.06em;
+  color: #fff;
+  text-shadow: 0 0.04em 0.4em rgba(0, 0, 0, 0.45); /* soft, just enough to read over the picture */
 }
 
 /* ---- the TV voice: off-screen, pink, a speaker on its left and a kiss in each line ---- */

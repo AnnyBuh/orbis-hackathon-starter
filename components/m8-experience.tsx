@@ -18,7 +18,6 @@ import {
   type Story,
   TIMING,
   balancedRows,
-  composePrompt,
   imageUrl,
   landMs,
   loadStory,
@@ -239,9 +238,6 @@ function Player({ driver, log, lines }: { driver: Driver; log: Log; lines: strin
       await step(d().start());
       await step(d().waitChunks(1)); // the first chunk has no frames
 
-      const boardSoFar: string[] = []; // diorama changes add up across scenes
-      let childNow = ""; // the child's latest expression and play
-
       for (let i = 0; i < story.ORDER.length; i++) {
         const sceneId = story.ORDER[i];
         const scene = story.SCENES[sceneId];
@@ -281,13 +277,9 @@ function Player({ driver, log, lines }: { driver: Driver; log: Log; lines: strin
         setPhase("choice");
         const picked = await step(new Promise<number>((r) => (choose.current = r)));
         const option = scene.mother[picked];
-        const change = scene.variants[variantKey]?.changes?.[picked] ?? {};
-        const changed = Boolean(change.board?.trim() || change.child?.trim());
-        if (change.board?.trim()) boardSoFar.push(change.board.trim());
-        if (change.child?.trim()) childNow = change.child.trim();
-        const prompt = changed
-          ? composePrompt(first.image?.prompt ?? "", boardSoFar, childNow, change)
-          : ""; // nothing written for this choice yet: the picture carries on
+        const steps = (scene.variants[variantKey]?.changes?.[picked]?.steps ?? [])
+          .map((s) => s.trim())
+          .filter(Boolean);
         st[option.key] = option.rule;
         if (option.how) st[`${option.key}how`] = option.how;
         log(`${scene.tag} · ${option.t}`);
@@ -297,10 +289,19 @@ function Player({ driver, log, lines }: { driver: Driver; log: Log; lines: strin
         setSays([]);
         setStamp(option.t);
         setPhase("answer");
-        await step(d().setPrompt(prompt));
+        // One step at a time: the first goes in before resuming, each next one after the last
+        // has had time to land. No steps written yet: the picture just carries on.
+        await step(d().setPrompt(steps[0] ?? ""));
         await step(d().resume());
+        let played = 0;
+        for (let s = 1; s < steps.length; s++) {
+          await step(d().waitChunks(TIMING.stepChunks));
+          played += TIMING.stepChunks;
+          await step(d().setPrompt(steps[s]));
+        }
         const last = i === story.ORDER.length - 1;
-        await step(d().waitChunks(last ? TIMING.afterLastChunks : TIMING.betweenChunks));
+        const minimum = last ? TIMING.afterLastChunks : TIMING.betweenChunks;
+        await step(d().waitChunks(Math.max(TIMING.lastStepChunks, minimum - played)));
         setStamp("");
       }
 

@@ -7,11 +7,10 @@ export type Option = {
   how?: string;
 };
 
-// What happens after a choice, per version of a scene: the boy and the diorama.
-export type Change = {
-  child?: string; // the boy's expression and how he plays
-  board?: string; // what changes on the diorama; adds up across scenes
-};
+// What Orbis is told after a choice, per version of a scene. Following the Orbis prompt guide:
+// only what visibly changes (never the whole world again), one action per step, sent a few
+// seconds apart so each change lands before the next.
+export type Change = { steps?: string[] };
 
 export type Scene = {
   tag: string;
@@ -19,7 +18,7 @@ export type Scene = {
   vo: string[];
   says: string[];
   mother: Option[];
-  image?: { file: string; prompt: string }; // only the first scene has one
+  image?: { file: string; prompt: string; referencePrompt?: string }; // only the first scene has one
   variants: Record<string, { changes?: Change[] }>; // changes[n] belongs to mother option n
 };
 
@@ -47,24 +46,6 @@ export async function loadStory(st: Record<string, unknown>) {
     `${source}\n;return { SCENES, ORDER, ENDINGS, DEATHS, variantFor, won, whichDeath };`,
   )(st) as Story;
   return { story, source: response.headers.get("X-Scenes-Source") ?? "" };
-}
-
-// The prompt sent to Orbis after a choice. The starting prompt never changes; only the child
-// and the diorama do. This choice's change goes first (in case the model reads only the start),
-// then the full starting prompt, then every diorama change so far and the child as he is now.
-export function composePrompt(base: string, boardSoFar: string[], childNow: string, change: Change) {
-  const now = [
-    change.board ? change.board.trim() : "The diorama stays as it is.",
-    childNow ? `The child: ${childNow}` : "",
-  ].filter(Boolean).join(" ");
-  return [
-    `CHANGE NOW: ${now}\nEverything else stays exactly as described below.`,
-    base,
-    boardSoFar.length
-      ? `THE DIORAMA SO FAR (in order):\n${boardSoFar.map((b, i) => `${i + 1}. ${b}`).join("\n")}`
-      : "",
-    childNow ? `THE CHILD RIGHT NOW: ${childNow}` : "",
-  ].filter(Boolean).join("\n\n");
 }
 
 // Images named in scenes.js are served from public/m8/.
@@ -109,8 +90,10 @@ export const TIMING = {
   readMsPerWord: 320, // how long a line stays alone before the next one comes
   minReadMs: 1300,
   tagMs: 1400, // SCENE 2/3/4 card between scenes
-  betweenChunks: 2, // chunks the answer plays before the next scene's lines
-  afterLastChunks: 3, // chunks the last answer plays before the end
+  betweenChunks: 6, // at least this many chunks (~10.8s) after an answer before the next scene
+  afterLastChunks: 6, // same for the last answer, before the ending card
+  stepChunks: 2, // chunks (~3.6s) between steps; the guide says a change takes 2-4s to land
+  lastStepChunks: 3, // the last step gets a little longer to land
   endingMs: 7000, // the ending card; keep in sync with the m8-endcard animations in experience.css
 };
 

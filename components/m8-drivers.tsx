@@ -164,7 +164,6 @@ export function useLiveDriver(log: Log, onDisconnected: () => void): Driver {
     }),
   );
   const [started, setStarted] = useState(false);
-  const [muted, setMuted] = useState(true);
   const chunks = useChunks();
 
   const ready = useRef<(() => void) | null>(null);
@@ -223,13 +222,12 @@ export function useLiveDriver(log: Log, onDisconnected: () => void): Driver {
       <ReactorView
         track="main_video"
         audioTrack="main_audio"
-        muted={muted}
+        muted // Orbis's own generated audio stays off; the film's sound is the music and effects
         videoObjectFit="cover"
       />
     ) : null,
     controls: (
       <>
-        <button onClick={() => setMuted((m) => !m)}>{muted ? "Sound on" : "Sound off"}</button>
         <button onClick={() => disconnect()} disabled={status === "disconnected"}>
           Disconnect (stops credits)
         </button>
@@ -256,6 +254,14 @@ export function useLiveDriver(log: Log, onDisconnected: () => void): Driver {
       await cmd("set_image", { image: uploaded });
       await hasImage;
       log(`image ${imageUrl}`);
+
+      // Skip Orbis's audio model entirely (silence on main_audio from the next start).
+      // Not fatal if refused: the player is muted anyway.
+      try {
+        await cmd("set_audio_enabled", { audio_enabled: false });
+      } catch (caught) {
+        log(`audio off refused: ${caught instanceof Error ? caught.message : String(caught)}`);
+      }
 
       const hasPrompt = waitFor(conditionsReady, "the prompt", 15_000);
       await cmd("set_prompt", { prompt });
