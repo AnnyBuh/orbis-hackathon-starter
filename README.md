@@ -1,3 +1,5 @@
+# M8 is an anti-sycophancy AI companion.
+
 **How to Train Your AI (Implicit Version)** is an interactive pitch about raising AI: four questions from a child who overheard explicit content on the TV, four answers from you, and a live-generated world that grows into one of six futures for humanity. The TV is explicit. What the child learns from it is implicit.
 
 This project is an interactive advertisement and pitch experience for M8, an anti-sycophancy AI companion trained through developmental principles rather than reinforcement learning fine-tuning.
