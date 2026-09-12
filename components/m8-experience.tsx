@@ -332,7 +332,7 @@ function Player({ driver, log, lines }: { driver: Driver; log: Log; lines: strin
         // Light first (it changes the whole frame), then the board steps, then the biggest board
         // change once more, because the model holds the scene and a single push gets smoothed away.
         const steps = [
-          ...(change?.light?.trim() ? [change.light.trim()] : []),
+          ...(TIMING.sendLight && change?.light?.trim() ? [change.light.trim()] : []),
           ...board,
           ...(TIMING.repeatFirstStep && board[0] ? [board[0]] : []),
         ];

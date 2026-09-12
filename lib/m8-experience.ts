@@ -95,7 +95,8 @@ export const TIMING = {
   afterLastChunks: 6, // same for the last answer, before the ending card
   stepChunks: 2, // chunks (~3.6s) between steps; the guide says a change takes 2-4s to land
   lastStepChunks: 3, // the last step gets a little longer to land
-  repeatFirstStep: true, // send the biggest board change again at the end: the model holds the scene, so push twice
+  sendLight: false, // send the choice's light change first (off: didn't work well with the video)
+  repeatFirstStep: false, // send the biggest board change again at the end (off: didn't work well with the video)
   wipeMs: 1500, // before/after wipe at the end of each answer
   yearSpinMs: 2600, // the year counter spinning forward after a choice
   endingMs: 7000, // the ending card; keep in sync with the m8-endcard animations in experience.css
