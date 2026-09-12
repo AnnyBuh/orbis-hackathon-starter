@@ -18,7 +18,7 @@ export type Driver = {
   status: string;
   view: ReactNode; // what fills the stage
   controls: ReactNode; // mode-specific buttons for the control bar
-  prepare: (imageUrl: string, prompt: string, useImage: boolean) => Promise<void>; // costs nothing
+  prepare: (imageUrl: string, prompt: string) => Promise<void>; // costs nothing
   start: () => Promise<void>;
   waitChunks: (n: number) => Promise<void>;
   pause: () => Promise<void>; // resolves once actually paused
@@ -116,14 +116,14 @@ export function useMockDriver(log: Log): Driver {
       </div>
     ) : null,
     controls: null,
-    prepare: async (imageUrl, prompt, useImage) => {
+    prepare: async (imageUrl, prompt) => {
       stopTimer();
       chunks.clear();
       pausing.current = false;
       setVisible(false);
       setPaused(false);
       setImage(imageUrl);
-      log(useImage ? `image ${imageUrl}` : "text-only start (live skips the image; the mock still shows it)");
+      log(`image ${imageUrl}`);
       log(describePrompt(prompt));
       if (!prompt.trim()) log("warning: live Orbis will refuse to start without a prompt");
     },
@@ -233,7 +233,7 @@ export function useLiveDriver(log: Log, onDisconnected: () => void): Driver {
         </button>
       </>
     ),
-    prepare: async (imageUrl, prompt, useImage) => {
+    prepare: async (imageUrl, prompt) => {
       chunks.clear();
       if (!prompt.trim()) {
         throw new Error("The starting image prompt in scenes.js is empty; Orbis needs one to start.");
@@ -247,17 +247,13 @@ export function useLiveDriver(log: Log, onDisconnected: () => void): Driver {
         setStarted(false);
       }
 
-      if (useImage) {
-        const blob = await (await fetch(imageUrl)).blob();
-        const file = new File([blob], imageUrl.split("/").pop() || "start.jpg", { type: blob.type });
-        const uploaded = await uploadFile(file, { name: file.name });
-        const hasImage = waitFor(imageReady, "the start image", 15_000);
-        await cmd("set_image", { image: uploaded });
-        await hasImage;
-        log(`image ${imageUrl}`);
-      } else {
-        log("text-only start: no start image, Orbis builds the scene from the prompt"); // the guide's T2V-first test
-      }
+      const blob = await (await fetch(imageUrl)).blob();
+      const file = new File([blob], imageUrl.split("/").pop() || "start.jpg", { type: blob.type });
+      const uploaded = await uploadFile(file, { name: file.name });
+      const hasImage = waitFor(imageReady, "the start image", 15_000);
+      await cmd("set_image", { image: uploaded });
+      await hasImage;
+      log(`image ${imageUrl}`);
 
       // Skip Orbis's audio model entirely (silence on main_audio from the next start).
       // Not fatal if refused: the player is muted anyway.
