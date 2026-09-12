@@ -17,7 +17,9 @@ import {
   type Option,
   type Story,
   TIMING,
+  YEARS,
   balancedRows,
+  grade,
   imageUrl,
   landMs,
   loadStory,
@@ -116,6 +118,40 @@ type Phase = "idle" | "intro" | "warming" | "tag" | "lines" | "choice" | "answer
 
 const ABORT = Symbol("abort");
 
+// Spins the year forward after a choice, easing out, like a time-lapse counter.
+function YearCounter({ from, to }: { from: number; to: number }) {
+  const [year, setYear] = useState(from);
+  useEffect(() => {
+    // Clock-based rather than requestAnimationFrame, which stops when the window isn't in front.
+    const began = Date.now();
+    const timer = setInterval(() => {
+      const p = Math.min(1, (Date.now() - began) / TIMING.yearSpinMs);
+      setYear(Math.round(from + (to - from) * (1 - Math.pow(1 - p, 3))));
+      if (p >= 1) clearInterval(timer);
+    }, 40);
+    return () => clearInterval(timer);
+  }, [from, to]);
+  return <div className="m8-year">{year}</div>;
+}
+
+// The picture as it is right now (live video or mock image), for the before/after wipe.
+function captureFrame() {
+  const el = document.querySelector<HTMLVideoElement | HTMLImageElement>(".m8-video video, .m8-video img");
+  if (!el) return null;
+  const w = el instanceof HTMLVideoElement ? el.videoWidth : el.naturalWidth;
+  const h = el instanceof HTMLVideoElement ? el.videoHeight : el.naturalHeight;
+  if (!w || !h) return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  canvas.getContext("2d")?.drawImage(el, 0, 0, w, h);
+  try {
+    return canvas.toDataURL("image/jpeg", 0.85);
+  } catch {
+    return null;
+  }
+}
+
 function Player({ driver, log, lines }: { driver: Driver; log: Log; lines: string[] }) {
   // The flow reads the newest driver on every step, not the one from the click.
   const driverRef = useRef(driver);
@@ -145,6 +181,11 @@ function Player({ driver, log, lines }: { driver: Driver; log: Log; lines: strin
   const [ending, setEnding] = useState("");
   const [endCard, setEndCard] = useState<{ num: number; total: number; name: string; outcome: string } | null>(null);
   const [runKey, setRunKey] = useState(0);
+  const [mood, setMood] = useState(0); // +1 per rule kept, -1 per rule broken: drives the colour grade
+  const [years, setYears] = useState<{ from: number; to: number } | null>(null);
+  const [before, setBefore] = useState<string | null>(null); // frame from before the choice, shown in the wipe
+  const [useImage, setUseImage] = useState(true);
+  const useImageRef = useRef(true);
 
   const runId = useRef(0);
   const choose = useRef<((index: number) => void) | null>(null);
@@ -222,6 +263,9 @@ function Player({ driver, log, lines }: { driver: Driver; log: Log; lines: strin
     setStamp("");
     setEnding("");
     setEndCard(null);
+    setMood(0);
+    setYears(null);
+    setBefore(null);
     setError("");
 
     try {
@@ -230,7 +274,7 @@ function Player({ driver, log, lines }: { driver: Driver; log: Log; lines: strin
       // Logo and intro line on black. Setup happens underneath; generation waits for it.
       setPhase("intro");
       const intro = new Promise<void>((r) => setTimeout(r, INTRO.ms));
-      await step(d().prepare(imageUrl(first.image?.file ?? ""), first.image?.prompt ?? ""));
+      await step(d().prepare(imageUrl(first.image?.file ?? ""), first.image?.prompt ?? "", useImageRef.current));
       await step(intro);
 
       setTag(first.tag);
@@ -241,6 +285,8 @@ function Player({ driver, log, lines }: { driver: Driver; log: Log; lines: strin
       // first line and sound should only come once the video is clearly playing.
       setTag("");
       await sleep(TIMING.leadInMs);
+
+      let moodNow = 0;
 
       for (let i = 0; i < story.ORDER.length; i++) {
         const sceneId = story.ORDER[i];
@@ -281,9 +327,17 @@ function Player({ driver, log, lines }: { driver: Driver; log: Log; lines: strin
         setPhase("choice");
         const picked = await step(new Promise<number>((r) => (choose.current = r)));
         const option = scene.mother[picked];
-        const steps = (scene.variants[variantKey]?.changes?.[picked]?.steps ?? [])
-          .map((s) => s.trim())
-          .filter(Boolean);
+        const change = scene.variants[variantKey]?.changes?.[picked];
+        const board = (change?.steps ?? []).map((s) => s.trim()).filter(Boolean);
+        // Light first (it changes the whole frame), then the board steps, then the biggest board
+        // change once more, because the model holds the scene and a single push gets smoothed away.
+        const steps = [
+          ...(change?.light?.trim() ? [change.light.trim()] : []),
+          ...board,
+          ...(TIMING.repeatFirstStep && board[0] ? [board[0]] : []),
+        ];
+        moodNow += option.rule ? 1 : -1;
+        const shot = captureFrame();
         st[option.key] = option.rule;
         if (option.how) st[`${option.key}how`] = option.how;
         log(`${scene.tag} · ${option.t}`);
@@ -297,6 +351,8 @@ function Player({ driver, log, lines }: { driver: Driver; log: Log; lines: strin
         // has had time to land. No steps written yet: the picture just carries on.
         await step(d().setPrompt(steps[0] ?? ""));
         await step(d().resume());
+        setMood(moodNow);
+        setYears({ from: YEARS[i] ?? YEARS[YEARS.length - 1], to: YEARS[i + 1] ?? YEARS[YEARS.length - 1] });
         let played = 0;
         for (let s = 1; s < steps.length; s++) {
           await step(d().waitChunks(TIMING.stepChunks));
@@ -306,6 +362,13 @@ function Player({ driver, log, lines }: { driver: Driver; log: Log; lines: strin
         const last = i === story.ORDER.length - 1;
         const minimum = last ? TIMING.afterLastChunks : TIMING.betweenChunks;
         await step(d().waitChunks(Math.max(TIMING.lastStepChunks, minimum - played)));
+        // Before/after: the world from before the choice wipes away to show what it became.
+        if (shot) {
+          setBefore(shot);
+          await sleep(TIMING.wipeMs);
+          setBefore(null);
+        }
+        setYears(null);
         setStamp("");
       }
 
@@ -345,7 +408,14 @@ function Player({ driver, log, lines }: { driver: Driver; log: Log; lines: strin
   return (
     <div className="m8-wrap">
       <div className="m8-stage">
-        <div className="m8-video">{driver.view}</div>
+        <div className="m8-video" style={{ filter: grade(mood).filter }}>
+          {driver.view}
+        </div>
+        <div className="m8-tint" style={{ background: grade(mood).tint }} />
+        {before && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img className="m8-before" src={before} alt="" />
+        )}
 
         <div className="m8-overlay" key={runKey}>
           {phase === "intro" && (
@@ -466,6 +536,8 @@ function Player({ driver, log, lines }: { driver: Driver; log: Log; lines: strin
             </div>
           )}
 
+          {years && <YearCounter key={`${years.from}-${years.to}`} from={years.from} to={years.to} />}
+
           {stamp && (
             <div className="m8-stamp" key={stamp}>
               {stamp}
@@ -477,6 +549,14 @@ function Player({ driver, log, lines }: { driver: Driver; log: Log; lines: strin
       <div className="m8-hud">
         <button onClick={run} disabled={!story}>
           {phase === "idle" ? "Start" : "Replay"}
+        </button>
+        <button
+          onClick={() => {
+            useImageRef.current = !useImageRef.current;
+            setUseImage(useImageRef.current);
+          }}
+        >
+          {useImage ? "Start image: on" : "Start image: off"}
         </button>
         <button onClick={toggleMusic}>{musicOn ? "Music off" : "Music on"}</button>
         {driver.controls}

@@ -10,7 +10,7 @@ export type Option = {
 // What Orbis is told after a choice, per version of a scene. Following the Orbis prompt guide:
 // only what visibly changes (never the whole world again), one action per step, sent a few
 // seconds apart so each change lands before the next.
-export type Change = { steps?: string[] };
+export type Change = { light?: string; steps?: string[] };
 
 export type Scene = {
   tag: string;
@@ -95,8 +95,22 @@ export const TIMING = {
   afterLastChunks: 6, // same for the last answer, before the ending card
   stepChunks: 2, // chunks (~3.6s) between steps; the guide says a change takes 2-4s to land
   lastStepChunks: 3, // the last step gets a little longer to land
+  repeatFirstStep: true, // send the biggest board change again at the end: the model holds the scene, so push twice
+  wipeMs: 1500, // before/after wipe at the end of each answer
+  yearSpinMs: 2600, // the year counter spinning forward after a choice
   endingMs: 7000, // the ending card; keep in sync with the m8-endcard animations in experience.css
 };
+
+// The year shown after each answer: time-lapse, Das Rad style. YEARS[i] -> YEARS[i + 1] after scene i + 1.
+export const YEARS = [2026, 2030, 2035, 2040, 2050];
+
+// The colour grade of the video: warmer with every rule kept, colder with every rule broken.
+export function grade(mood: number) {
+  const k = Math.min(Math.abs(mood), 4);
+  if (mood > 0) return { filter: `saturate(${1 + 0.08 * k}) brightness(${1 + 0.03 * k})`, tint: `rgba(255, 170, 70, ${0.07 * k})` };
+  if (mood < 0) return { filter: `saturate(${1 - 0.14 * k}) brightness(${1 - 0.05 * k})`, tint: `rgba(40, 100, 255, ${0.09 * k})` };
+  return { filter: "none", tint: "transparent" };
+}
 
 // Splits a child line into even rows, so the speech bubble can hug its text. (CSS
 // wrapping leaves the box as wide as the unwrapped line, with empty space either side.)
