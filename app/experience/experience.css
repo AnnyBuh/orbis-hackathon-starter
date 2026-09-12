@@ -33,6 +33,7 @@
 }
 
 .m8-overlay {
+  --font-plain: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -129,7 +130,7 @@
 }
 
 .m8-intro-title img {
-  width: 13%;
+  width: 22%;
   filter: invert(1); /* Visko's wordmark is black on transparent */
   opacity: 0;
   animation: m8-line-in 900ms ease-out 5200ms forwards;
@@ -149,8 +150,65 @@
   to { opacity: 0; }
 }
 
+/* ---- the ending card (7s = TIMING.endingMs) ----
+   0.0s  fade to black · 0.5s "Ending 3 of 6" · 1.2s the name · 2.4s the sentence · 6.2s text out (stays black) */
+
+.m8-endcard {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12%;
+  text-align: center;
+  background: #000;
+  color: #f4f1ea;
+  font-family: var(--font-plain);
+  opacity: 0;
+  animation: m8-line-in 700ms ease-out forwards; /* fades to black once, never back to the video */
+}
+
+.m8-endcard p,
+.m8-endcard h2 {
+  margin: 0;
+  opacity: 0;
+}
+
+.m8-endcard-num {
+  font-weight: 500;
+  font-size: 1.5cqw;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #a9a59b;
+  animation:
+    m8-line-in 800ms ease-out 500ms forwards,
+    m8-intro-out 800ms ease-in 6200ms forwards;
+}
+
+.m8-endcard h2 {
+  margin: 0.35em 0 0.9em;
+  font-weight: 600;
+  font-size: 4cqw;
+  line-height: 1.15;
+  animation:
+    m8-line-in 1000ms ease-out 1200ms forwards,
+    m8-intro-out 800ms ease-in 6200ms forwards;
+}
+
+.m8-endcard-outcome {
+  max-width: 34em;
+  font-weight: 500;
+  font-size: 2.2cqw;
+  line-height: 1.4;
+  color: #e8e3d8;
+  animation:
+    m8-line-in 1000ms ease-out 2400ms forwards,
+    m8-intro-out 800ms ease-in 6200ms forwards;
+}
+
 /* ---- the closing card ----
-   0.0s  fade to black over the last frame
+   0.0s  starts on black, straight after the ending card
    1.2s  first line in · 3.4s second line in · both hold
    7.6s  lines out
    8.8s  logo in · 10.6s link in · both stay */
@@ -158,9 +216,7 @@
 .m8-outro {
   position: absolute;
   inset: 0;
-  background: #000;
-  opacity: 0;
-  animation: m8-line-in 1000ms ease-out forwards;
+  background: #000; /* already black: the ending card before it was black too */
   font: 600 2.4cqw / 1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   letter-spacing: 0.02em;
   color: #f4f1ea;
@@ -280,10 +336,9 @@
 
 /* Inside the box, in front of the words. */
 .m8-kiss {
-  display: inline-block;
+  flex: none;
   width: 1.6em;
-  margin-right: 0.45em;
-  vertical-align: -0.3em;
+  margin: 0.05em 0.5em 0 0;
   filter: drop-shadow(0.06em 0.06em 0 #000);
   opacity: 0;
   animation: m8-pop 420ms cubic-bezier(0.2, 1.6, 0.4, 1) 80ms forwards;
@@ -292,11 +347,12 @@
 .m8-tv-lines {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 0.6em;
+  gap: 0.3em;
 }
 
 .m8-tv-box {
+  display: flex;
+  align-items: flex-start;
   padding: 0.45em 0.9em;
   font-size: 2.5cqw;
   line-height: 1.1;
@@ -316,21 +372,67 @@
   100% { opacity: 1; transform: translateX(0) skewX(-10deg); }
 }
 
-/* ---- the child: the big pop ---- */
+/* ---- the child: plain bold text in a white speech bubble, tail up towards the child ---- */
 
 .m8-child {
   position: absolute;
   left: 50%;
   top: 56%;
-  width: 84%;
-  transform: translate(-50%, -50%) rotate(-2deg);
+  translate: -50% -50%;
+  width: max-content; /* rows are pre-split and don't wrap, so the bubble hugs the text */
+  max-width: 92%;
+  padding: 0.4em 0.75em;
   text-align: center;
-  font-size: 4.4cqw;
-  line-height: 1.05;
-  color: #ffe45c;
-  -webkit-text-stroke: 0.05em #000;
-  paint-order: stroke fill;
-  text-shadow: 0.05em 0.05em 0 #ff2d55, -0.035em -0.035em 0 #00e5ff;
+  font-family: var(--font-plain);
+  font-weight: 700;
+  font-size: 3.2cqw;
+  line-height: 1.2;
+  color: #16141a;
+  background: rgba(255, 253, 247, 0.6);
+  border: 0.22cqw solid #fff;
+  border-radius: 1.1em;
+  animation: m8-bubble-in 320ms cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+
+.m8-child-row {
+  white-space: nowrap;
+}
+
+/* The tail: a small solid white triangle, the same white as the outline. */
+.m8-child::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -0.62em;
+  translate: -50% 0;
+  border-style: solid;
+  border-color: transparent;
+  border-width: 0 0.5em 0.62em;
+  border-bottom-color: #fff;
+}
+
+.m8-child .m8-word:last-child {
+  margin-right: 0;
+}
+
+@keyframes m8-bubble-in {
+  from { opacity: 0; transform: scale(0.6); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* ---- pink wash while choosing: over the frozen frame, under all text and buttons ---- */
+
+.m8-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 70, 160, 0.3);
+  backdrop-filter: brightness(0.8) saturate(0.75);
+  opacity: 0;
+  transition: opacity 500ms ease;
+}
+
+.m8-dim.is-on {
+  opacity: 1;
 }
 
 /* ---- the mother's choices: comic panels across the bottom ---- */
@@ -350,9 +452,10 @@
 
 .m8-choice {
   padding: 0.5em 0.8em;
-  font-family: inherit;
-  font-size: 2.2cqw;
-  line-height: 1.1;
+  font-family: var(--font-plain);
+  font-weight: 700;
+  font-size: 2cqw;
+  line-height: 1.2;
   color: #111;
   background:
     radial-gradient(circle, #0002 1px, transparent 1.4px) 0 0 / 6px 6px,
@@ -395,7 +498,9 @@
   translate: -50% 0;
   max-width: 90%;
   padding: 0.4em 0.8em;
-  font-size: 2.8cqw;
+  font-family: var(--font-plain);
+  font-weight: 700;
+  font-size: 2.6cqw;
   text-align: center;
   color: #111;
   background: #fffdf2;

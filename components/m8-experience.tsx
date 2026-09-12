@@ -17,6 +17,8 @@ import {
   type Option,
   type Story,
   TIMING,
+  balancedRows,
+  composePrompt,
   imageUrl,
   landMs,
   loadStory,
@@ -111,7 +113,7 @@ function KissMark() {
   );
 }
 
-type Phase = "idle" | "intro" | "warming" | "tag" | "lines" | "choice" | "answer" | "done";
+type Phase = "idle" | "intro" | "warming" | "tag" | "lines" | "choice" | "answer" | "ending" | "done";
 
 const ABORT = Symbol("abort");
 
@@ -142,6 +144,7 @@ function Player({ driver, log, lines }: { driver: Driver; log: Log; lines: strin
   const [stamp, setStamp] = useState("");
   const [where, setWhere] = useState("");
   const [ending, setEnding] = useState("");
+  const [endCard, setEndCard] = useState<{ num: number; total: number; name: string; outcome: string } | null>(null);
   const [runKey, setRunKey] = useState(0);
 
   const runId = useRef(0);
@@ -171,7 +174,11 @@ function Player({ driver, log, lines }: { driver: Driver; log: Log; lines: strin
     };
   }, []);
 
-  const blocked = (caught: unknown) => log(`sound blocked: ${String(caught)}`);
+  // An AbortError only means a sound was stopped right after starting; nothing was blocked.
+  const blocked = (caught: unknown) => {
+    if (caught instanceof DOMException && caught.name === "AbortError") return;
+    log(`sound blocked: ${String(caught)}`);
+  };
   const startSfx = (name: "moan" | "baby") => tracks()[name].playFromStart().catch(blocked);
   const stopSfx = (name: "moan" | "baby") => tracks()[name].fadeOut(SFX_FADE_MS);
 
@@ -215,6 +222,7 @@ function Player({ driver, log, lines }: { driver: Driver; log: Log; lines: strin
     setOptions([]);
     setStamp("");
     setEnding("");
+    setEndCard(null);
     setError("");
 
     try {
@@ -231,10 +239,15 @@ function Player({ driver, log, lines }: { driver: Driver; log: Log; lines: strin
       await step(d().start());
       await step(d().waitChunks(1)); // the first chunk has no frames
 
+      const boardSoFar: string[] = []; // diorama changes add up across scenes
+      let childNow = ""; // the child's latest expression and play
+
       for (let i = 0; i < story.ORDER.length; i++) {
         const sceneId = story.ORDER[i];
         const scene = story.SCENES[sceneId];
-        setWhere(`${scene.tag} · ${story.variantFor(sceneId)}`);
+        // Which version of this scene we're in (decided by earlier answers, so read it now).
+        const variantKey = story.variantFor(sceneId);
+        setWhere(`${scene.tag} · ${variantKey}`);
 
         if (i > 0) {
           setTag(scene.tag);
@@ -268,6 +281,13 @@ function Player({ driver, log, lines }: { driver: Driver; log: Log; lines: strin
         setPhase("choice");
         const picked = await step(new Promise<number>((r) => (choose.current = r)));
         const option = scene.mother[picked];
+        const change = scene.variants[variantKey]?.changes?.[picked] ?? {};
+        const changed = Boolean(change.board?.trim() || change.child?.trim());
+        if (change.board?.trim()) boardSoFar.push(change.board.trim());
+        if (change.child?.trim()) childNow = change.child.trim();
+        const prompt = changed
+          ? composePrompt(first.image?.prompt ?? "", boardSoFar, childNow, change)
+          : ""; // nothing written for this choice yet: the picture carries on
         st[option.key] = option.rule;
         if (option.how) st[`${option.key}how`] = option.how;
         log(`${scene.tag} · ${option.t}`);
@@ -277,7 +297,7 @@ function Player({ driver, log, lines }: { driver: Driver; log: Log; lines: strin
         setSays([]);
         setStamp(option.t);
         setPhase("answer");
-        await step(d().setPrompt(option.prompt ?? ""));
+        await step(d().setPrompt(prompt));
         await step(d().resume());
         const last = i === story.ORDER.length - 1;
         await step(d().waitChunks(last ? TIMING.afterLastChunks : TIMING.betweenChunks));
@@ -285,11 +305,19 @@ function Player({ driver, log, lines }: { driver: Driver; log: Log; lines: strin
       }
 
       await step(d().pause());
-      setEnding(
-        story.won()
-          ? `Ending A · ${story.ENDINGS.A.h}`
-          : `Ending C · ${story.ENDINGS.C.h} · ${story.whichDeath().n}`,
-      );
+      // The film is over: stop the stream for good (live, this disconnects and stops credits).
+      await step(d().stop());
+
+      // Which ending, as a card: "Ending 3 of 6", the ending's name, one sentence.
+      const total = 1 + Object.keys(story.DEATHS).length;
+      const heaven = story.ENDINGS.A;
+      const card = story.won()
+        ? { num: heaven.num ?? 1, name: heaven.h, outcome: heaven.outcome ?? "" }
+        : { num: story.whichDeath().num, name: story.ENDINGS.C.h, outcome: story.whichDeath().outcome };
+      setEndCard({ ...card, total });
+      setEnding(`Ending ${card.num} of ${total} · ${card.name}${story.won() ? "" : ` · ${story.whichDeath().n}`}`);
+      setPhase("ending");
+      await sleep(TIMING.endingMs);
       setPhase("done");
     } catch (caught) {
       if (caught === ABORT) return; // the newer run has already stopped the sound
@@ -337,13 +365,18 @@ function Player({ driver, log, lines }: { driver: Driver; log: Log; lines: strin
             </div>
           )}
 
+          {/* Pink wash over the frozen frame, under all the text, while choosing. */}
+          <div className={`m8-dim${phase === "choice" ? " is-on" : ""}`} />
+
           {vo.length > 0 && (
             <div className="m8-tv">
               <SpeakerMark talking={tvWriting} />
+              {/* One box for all TV lines, the kiss once at its start. */}
+              <div className="m8-tv-box">
+              <KissMark />
               <div className="m8-tv-lines">
               {vo.map((line, n) => (
-                <div className="m8-tv-box" key={n}>
-                  <KissMark />
+                <div className="m8-tv-line" key={n}>
                   {line.split(" ").map((w, i) => (
                     <span
                       className="m8-tv-word"
@@ -356,24 +389,35 @@ function Player({ driver, log, lines }: { driver: Driver; log: Log; lines: strin
                 </div>
               ))}
               </div>
+              </div>
             </div>
           )}
 
           {says.length > 0 && (
             <div className="m8-child">
-              {says.map((line, n) => (
-                <div key={n}>
-                  {line.split(" ").map((w, i) => (
-                    <span
-                      className="m8-word"
-                      key={i}
-                      style={{ animationDelay: `${i * TIMING.wordStaggerMs}ms` }}
-                    >
-                      {w}
-                    </span>
-                  ))}
-                </div>
-              ))}
+              {says.map((line, n) => {
+                let index = 0; // word count across rows, for the pop-in stagger
+                return (
+                  <div key={n}>
+                    {balancedRows(line).map((row, r) => (
+                      <div className="m8-child-row" key={r}>
+                        {row.map((w) => {
+                          const i = index++;
+                          return (
+                            <span
+                              className="m8-word"
+                              key={i}
+                              style={{ animationDelay: `${i * TIMING.wordStaggerMs}ms` }}
+                            >
+                              {w}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -389,6 +433,16 @@ function Player({ driver, log, lines }: { driver: Driver; log: Log; lines: strin
                   {option.t}
                 </button>
               ))}
+            </div>
+          )}
+
+          {phase === "ending" && endCard && (
+            <div className="m8-endcard">
+              <p className="m8-endcard-num">
+                Ending {endCard.num} of {endCard.total}
+              </p>
+              <h2>{endCard.name}</h2>
+              <p className="m8-endcard-outcome">{endCard.outcome}</p>
             </div>
           )}
 
