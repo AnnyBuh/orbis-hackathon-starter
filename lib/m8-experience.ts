@@ -23,7 +23,7 @@ export type Scene = {
 };
 
 // One hell ending: its name, its number on screen, and the sentence about humanity and AI.
-export type Ending = { n: string; num: number; outcome: string };
+export type Ending = { n: string; num: number; title?: string; outcome: string };
 
 export type Story = {
   SCENES: Record<string, Scene>;
@@ -86,6 +86,7 @@ export const OUTRO = {
 
 export const TIMING = {
   chunkMs: 1800, // Orbis emits a chunk about every 1.8s; the mock ticks at the same rate
+  leadInMs: 5000, // the video plays on its own this long before scene 1's first line and sound
   wordStaggerMs: 90, // gap between words stamping in
   readMsPerWord: 320, // how long a line stays alone before the next one comes
   minReadMs: 1300,

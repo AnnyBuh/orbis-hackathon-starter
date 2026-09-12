@@ -237,6 +237,10 @@ function Player({ driver, log, lines }: { driver: Driver; log: Log; lines: strin
       setPhase("warming");
       await step(d().start());
       await step(d().waitChunks(1)); // the first chunk has no frames
+      // Give the picture a head start: the stream takes a moment to actually show, and scene 1's
+      // first line and sound should only come once the video is clearly playing.
+      setTag("");
+      await sleep(TIMING.leadInMs);
 
       for (let i = 0; i < story.ORDER.length; i++) {
         const sceneId = story.ORDER[i];
@@ -314,7 +318,7 @@ function Player({ driver, log, lines }: { driver: Driver; log: Log; lines: strin
       const heaven = story.ENDINGS.A;
       const card = story.won()
         ? { num: heaven.num ?? 1, name: heaven.h, outcome: heaven.outcome ?? "" }
-        : { num: story.whichDeath().num, name: story.ENDINGS.C.h, outcome: story.whichDeath().outcome };
+        : { num: story.whichDeath().num, name: story.whichDeath().title ?? story.ENDINGS.C.h, outcome: story.whichDeath().outcome };
       setEndCard({ ...card, total });
       setEnding(`Ending ${card.num} of ${total} · ${card.name}${story.won() ? "" : ` · ${story.whichDeath().n}`}`);
       setPhase("ending");

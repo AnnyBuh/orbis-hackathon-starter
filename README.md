@@ -1,3 +1,11 @@
+This project is an interactive advertisement and pitch experience for M8, an anti-sycophancy AI companion trained through developmental principles rather than reinforcement learning fine-tuning.
+
+M8 is also a moonshot project to solve the AI alignment problem: raising an LLM as a descendant of humanity, so that it can negotiate with other utilitarian overlord agents to preserve humanity and maximize human caretaking in an AI utopia.
+
+*Anna, Founder of M8*
+
+---
+
 # Orbis hackathon starter!
 
 A minimal Next.js example for the public Reactor-hosted Visko Orbis Stable API.
